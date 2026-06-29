@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chat-e</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f0f13;
+      color: #e8e8f0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .card {
+      background: #1a1a24;
+      border: 1px solid #2a2a3a;
+      border-radius: 16px;
+      padding: 40px;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+    }
+
+    h1 {
+      font-size: 1.8rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+      background: linear-gradient(135deg, #a78bfa, #60a5fa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .subtitle {
+      color: #6b6b8a;
+      font-size: 0.875rem;
+      margin-bottom: 32px;
+    }
+
+    label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #9090b0;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 8px;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      background: #12121a;
+      border: 1px solid #2a2a3a;
+      border-radius: 10px;
+      padding: 12px 16px;
+      color: #e8e8f0;
+      font-size: 1rem;
+      outline: none;
+      transition: border-color 0.2s;
+      margin-bottom: 24px;
+    }
+
+    input[type="text"]:focus { border-color: #7c6bf5; }
+    input[type="text"]::placeholder { color: #3a3a55; }
+
+    .btn-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    button {
+      padding: 13px;
+      border: none;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+
+    button:active { transform: scale(0.97); }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #7c6bf5, #5b8def);
+      color: #fff;
+    }
+
+    .btn-secondary {
+      background: #24243a;
+      color: #c8c8e8;
+      border: 1px solid #2a2a3a;
+    }
+
+    .btn-secondary:hover { background: #2e2e48; }
+
+    #join-section {
+      margin-top: 20px;
+      display: none;
+    }
+
+    #join-section.visible { display: block; }
+
+    .error {
+      margin-top: 16px;
+      padding: 10px 14px;
+      background: #2a1020;
+      border: 1px solid #5a2030;
+      border-radius: 8px;
+      color: #f87171;
+      font-size: 0.85rem;
+      display: none;
+    }
+
+    .error.visible { display: block; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Chat-e</h1>
+    <p class="subtitle">Chat grupal con IA en tiempo real</p>
+
+    <label for="username">Tu nombre</label>
+    <input type="text" id="username" placeholder="Ej: Alma" autocomplete="off" />
+
+    <div class="btn-group">
+      <button class="btn-primary" id="btn-create">Crear sala</button>
+      <button class="btn-secondary" id="btn-join-toggle">Unirme</button>
+    </div>
+
+    <div id="join-section">
+      <label for="room-code" style="margin-top:20px;">Código de sala</label>
+      <input type="text" id="room-code" placeholder="Ej: X3K9AZ" maxlength="6"
+             style="text-transform:uppercase; letter-spacing:0.15em;" autocomplete="off" />
+      <button class="btn-primary" id="btn-join" style="width:100%;">Entrar a la sala</button>
+    </div>
+
+    <div class="error" id="error"></div>
+  </div>
+
+  <script>
+    const API = 'http://localhost:8000';
+
+    const usernameEl = document.getElementById('username');
+    const btnCreate  = document.getElementById('btn-create');
+    const btnToggle  = document.getElementById('btn-join-toggle');
+    const joinSection = document.getElementById('join-section');
+    const roomCodeEl = document.getElementById('room-code');
+    const btnJoin    = document.getElementById('btn-join');
+    const errorEl    = document.getElementById('error');
+
+    function showError(msg) {
+      errorEl.textContent = msg;
+      errorEl.classList.add('visible');
+    }
+
+    function clearError() {
+      errorEl.classList.remove('visible');
+    }
+
+    function setLoading(btn, loading) {
+      btn.disabled = loading;
+      btn.textContent = loading ? 'Cargando...' : btn.dataset.label;
+    }
+
+    btnCreate.dataset.label  = 'Crear sala';
+    btnJoin.dataset.label    = 'Entrar a la sala';
+
+    btnToggle.addEventListener('click', () => {
+      joinSection.classList.toggle('visible');
+      clearError();
+    });
+
+    async function getToken(username) {
+      const res = await fetch(`${API}/auth/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username }),
+      });
+      if (!res.ok) throw new Error('No se pudo obtener el token');
+      const { token } = await res.json();
+      return token;
+    }
+
+    btnCreate.addEventListener('click', async () => {
+      clearError();
+      const username = usernameEl.value.trim();
+      if (!username) return showError('Introduce tu nombre primero.');
+
+      setLoading(btnCreate, true);
+      try {
+        const [{ room_id }, token] = await Promise.all([
+          fetch(`${API}/rooms`, { method: 'POST' }).then(r => r.json()),
+          getToken(username),
+        ]);
+        localStorage.setItem('chat_token', token);
+        localStorage.setItem('chat_room', room_id);
+        localStorage.setItem('chat_user', username);
+        window.location.href = 'chat.html';
+      } catch (e) {
+        showError('Error conectando con el servidor.');
+      } finally {
+        setLoading(btnCreate, false);
+      }
+    });
+
+    btnJoin.addEventListener('click', async () => {
+      clearError();
+      const username = usernameEl.value.trim();
+      const roomId   = roomCodeEl.value.trim().toUpperCase();
+      if (!username) return showError('Introduce tu nombre primero.');
+      if (roomId.length < 1) return showError('Introduce el código de sala.');
+
+      setLoading(btnJoin, true);
+      try {
+        const token = await getToken(username);
+        localStorage.setItem('chat_token', token);
+        localStorage.setItem('chat_room', roomId);
+        localStorage.setItem('chat_user', username);
+        window.location.href = 'chat.html';
+      } catch (e) {
+        showError('Error conectando con el servidor.');
+      } finally {
+        setLoading(btnJoin, false);
+      }
+    });
+
+    usernameEl.addEventListener('keydown', e => {
+      if (e.key === 'Enter') btnCreate.click();
+    });
+
+    roomCodeEl.addEventListener('keydown', e => {
+      if (e.key === 'Enter') btnJoin.click();
+    });
+  </script>
+</body>
+</html>

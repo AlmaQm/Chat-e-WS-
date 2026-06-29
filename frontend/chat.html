@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chat-e</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f0f13;
+      color: #e8e8f0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 20px;
+      background: #1a1a24;
+      border-bottom: 1px solid #2a2a3a;
+      flex-shrink: 0;
+    }
+
+    .header-left { display: flex; align-items: center; gap: 12px; }
+
+    .header h1 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #a78bfa, #60a5fa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .room-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #12121a;
+      border: 1px solid #2a2a3a;
+      border-radius: 8px;
+      padding: 5px 12px;
+      font-size: 0.8rem;
+      color: #9090b0;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+
+    .room-badge:hover { border-color: #7c6bf5; }
+
+    .room-badge .code {
+      font-family: monospace;
+      font-size: 0.9rem;
+      color: #c8c8e8;
+      letter-spacing: 0.1em;
+    }
+
+    .copy-hint { font-size: 0.7rem; color: #5a5a7a; }
+
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #4ade80;
+      flex-shrink: 0;
+    }
+
+    .status-dot.disconnected { background: #f87171; }
+
+    a.leave {
+      font-size: 0.8rem;
+      color: #6b6b8a;
+      text-decoration: none;
+      padding: 6px 12px;
+      border-radius: 8px;
+      border: 1px solid #2a2a3a;
+      transition: color 0.2s, border-color 0.2s;
+    }
+
+    a.leave:hover { color: #f87171; border-color: #5a2030; }
+
+    /* ── Messages ── */
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      scroll-behavior: smooth;
+    }
+
+    #messages::-webkit-scrollbar { width: 4px; }
+    #messages::-webkit-scrollbar-track { background: transparent; }
+    #messages::-webkit-scrollbar-thumb { background: #2a2a3a; border-radius: 2px; }
+
+    .msg {
+      max-width: 75%;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .msg.mine  { align-self: flex-end; align-items: flex-end; }
+    .msg.other { align-self: flex-start; align-items: flex-start; }
+    .msg.ai    { align-self: flex-start; align-items: flex-start; max-width: 85%; }
+    .msg.system { align-self: center; }
+
+    .msg-name {
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: #6b6b8a;
+      padding: 0 4px;
+    }
+
+    .msg.mine .msg-name { color: #7c6bf5; }
+    .msg.ai .msg-name   { color: #60a5fa; }
+
+    .msg-bubble {
+      padding: 10px 14px;
+      border-radius: 14px;
+      font-size: 0.92rem;
+      line-height: 1.5;
+      word-break: break-word;
+    }
+
+    .msg.mine  .msg-bubble { background: #312d5a; border-bottom-right-radius: 4px; }
+    .msg.other .msg-bubble { background: #1e1e2e; border: 1px solid #2a2a3a; border-bottom-left-radius: 4px; }
+    .msg.ai    .msg-bubble {
+      background: #102030;
+      border: 1px solid #1e3a5a;
+      border-bottom-left-radius: 4px;
+      white-space: pre-wrap;
+    }
+
+    .msg.system .msg-bubble {
+      background: transparent;
+      color: #4a4a6a;
+      font-size: 0.78rem;
+      padding: 2px 8px;
+    }
+
+    /* ── Typing indicator ── */
+    #typing {
+      padding: 0 20px 10px;
+      font-size: 0.8rem;
+      color: #5a7a9a;
+      min-height: 26px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .dots span {
+      display: inline-block;
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: #5a7a9a;
+      animation: bounce 1.2s infinite;
+    }
+
+    .dots span:nth-child(2) { animation-delay: 0.2s; }
+    .dots span:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes bounce {
+      0%, 60%, 100% { transform: translateY(0); }
+      30%           { transform: translateY(-5px); }
+    }
+
+    /* ── Input bar ── */
+    .input-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 20px;
+      background: #1a1a24;
+      border-top: 1px solid #2a2a3a;
+      flex-shrink: 0;
+    }
+
+    #msg-input {
+      flex: 1;
+      background: #12121a;
+      border: 1px solid #2a2a3a;
+      border-radius: 10px;
+      padding: 11px 16px;
+      color: #e8e8f0;
+      font-size: 0.95rem;
+      outline: none;
+      resize: none;
+      transition: border-color 0.2s;
+      max-height: 120px;
+      overflow-y: auto;
+    }
+
+    #msg-input:focus   { border-color: #7c6bf5; }
+    #msg-input::placeholder { color: #3a3a55; }
+
+    #btn-send {
+      background: linear-gradient(135deg, #7c6bf5, #5b8def);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      width: 44px; height: 44px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s;
+      flex-shrink: 0;
+    }
+
+    #btn-send:active  { transform: scale(0.93); }
+    #btn-send:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    #btn-send svg { width: 18px; height: 18px; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="header-left">
+      <div class="status-dot" id="status-dot"></div>
+      <h1>Chat-e</h1>
+    </div>
+    <div class="room-badge" id="room-badge" title="Clic para copiar">
+      <span>Sala:</span>
+      <span class="code" id="room-code-display"></span>
+      <span class="copy-hint" id="copy-hint">copiar</span>
+    </div>
+    <a class="leave" href="index.html">Salir</a>
+  </div>
+
+  <div id="messages"></div>
+
+  <div id="typing"></div>
+
+  <div class="input-bar">
+    <textarea id="msg-input" rows="1" placeholder="Escribe un mensaje…"></textarea>
+    <button id="btn-send" disabled title="Enviar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round">
+        <line x1="22" y1="2" x2="11" y2="13"></line>
+        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+      </svg>
+    </button>
+  </div>
+
+  <script>
+    const WS_BASE  = 'ws://localhost:8000';
+
+    const token    = localStorage.getItem('chat_token');
+    const roomId   = localStorage.getItem('chat_room');
+    const username = localStorage.getItem('chat_user');
+
+    if (!token || !roomId || !username) {
+      window.location.href = 'index.html';
+    }
+
+    document.getElementById('room-code-display').textContent = roomId;
+    document.title = `Chat-e · ${roomId}`;
+
+    /* ── Copy room code ── */
+    document.getElementById('room-badge').addEventListener('click', () => {
+      navigator.clipboard.writeText(roomId).then(() => {
+        const hint = document.getElementById('copy-hint');
+        hint.textContent = '¡copiado!';
+        setTimeout(() => hint.textContent = 'copiar', 1500);
+      });
+    });
+
+    /* ── DOM refs ── */
+    const messagesEl = document.getElementById('messages');
+    const typingEl   = document.getElementById('typing');
+    const inputEl    = document.getElementById('msg-input');
+    const sendBtn    = document.getElementById('btn-send');
+    const statusDot  = document.getElementById('status-dot');
+
+    /* ── Message renderer ── */
+    function appendMessage({ type, user, text }) {
+      const wrapper = document.createElement('div');
+      wrapper.classList.add('msg');
+
+      if (type === 'message') {
+        const isMe = user === username;
+        wrapper.classList.add(isMe ? 'mine' : 'other');
+        const name = document.createElement('div');
+        name.classList.add('msg-name');
+        name.textContent = isMe ? 'Tú' : user;
+        const bubble = document.createElement('div');
+        bubble.classList.add('msg-bubble');
+        bubble.textContent = text;
+        wrapper.append(name, bubble);
+
+      } else if (type === 'ai_response') {
+        wrapper.classList.add('ai');
+        const name = document.createElement('div');
+        name.classList.add('msg-name');
+        name.textContent = '✦ IA';
+        const bubble = document.createElement('div');
+        bubble.classList.add('msg-bubble');
+        bubble.textContent = text;
+        wrapper.append(name, bubble);
+
+      } else if (type === 'system') {
+        wrapper.classList.add('system');
+        const bubble = document.createElement('div');
+        bubble.classList.add('msg-bubble');
+        bubble.textContent = text;
+        wrapper.appendChild(bubble);
+      }
+
+      messagesEl.appendChild(wrapper);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function showTyping() {
+      typingEl.innerHTML = `
+        <span>IA escribiendo</span>
+        <span class="dots">
+          <span></span><span></span><span></span>
+        </span>`;
+    }
+
+    function hideTyping() {
+      typingEl.innerHTML = '';
+    }
+
+    /* ── WebSocket ── */
+    let ws;
+
+    function connect() {
+      ws = new WebSocket(`${WS_BASE}/ws/${roomId}?token=${token}`);
+
+      ws.addEventListener('open', () => {
+        statusDot.classList.remove('disconnected');
+        sendBtn.disabled = false;
+      });
+
+      ws.addEventListener('message', ({ data }) => {
+        let msg;
+        try { msg = JSON.parse(data); } catch { return; }
+
+        if (msg.type === 'ai_response') hideTyping();
+        appendMessage(msg);
+      });
+
+      ws.addEventListener('close', () => {
+        statusDot.classList.add('disconnected');
+        sendBtn.disabled = true;
+        hideTyping();
+        setTimeout(connect, 3000);
+      });
+
+      ws.addEventListener('error', () => ws.close());
+    }
+
+    connect();
+
+    /* ── Send ── */
+    function sendMessage() {
+      const text = inputEl.value.trim();
+      if (!text || ws.readyState !== WebSocket.OPEN) return;
+      ws.send(JSON.stringify({ text }));
+      inputEl.value = '';
+      inputEl.style.height = 'auto';
+      showTyping();
+    }
+
+    sendBtn.addEventListener('click', sendMessage);
+
+    inputEl.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    inputEl.addEventListener('input', () => {
+      inputEl.style.height = 'auto';
+      inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + 'px';
+    });
+  </script>
+</body>
+</html>
